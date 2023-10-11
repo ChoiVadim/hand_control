@@ -27,7 +27,6 @@ def main():
 
     # Previous time and Current time
     p_time = 0
-    c_time = 0  
     
     # Webcam width and height
     w_camp, h_cam = 640, 480
@@ -46,7 +45,7 @@ def main():
         success, img = cap.read()
         
         # Find hands
-        img = detecter.findHands(img)
+        img = detecter.draw_hands(img)
 
         # Find position of all landmarks
         lmList = detecter.findPosition(img)

@@ -1,9 +1,10 @@
-import cv2
-import mediapipe as mp
-from time import time
+from time import time, sleep
 import numpy as np
 
-from google.protobuf.json_format import MessageToDict
+import cv2
+import mediapipe as mp
+from cvzone.FPS import FPS
+
 
 TEXT_COLOR = (0, 0, 0)
 DOT_COLOR = (0, 125, 0)
@@ -21,7 +22,6 @@ class handDetector():
         self.mpHands = mp.solutions.hands
         self.hands = self.mpHands.Hands(self.mode, self.maxHands, self.modelC, self.detectionCon, self.trackCon)
         self.mpDraw = mp.solutions.drawing_utils
-        self.MessageToDict = MessageToDict
 
     def draw_hands(self, img , draw=True):
 
@@ -92,6 +92,7 @@ class handDetector():
 
         return lmList
     
+
     def find_pos_hands(self, img):
         left_hand_lmList = []
         right_hand_lmList = []
@@ -99,10 +100,10 @@ class handDetector():
         # Check if there is hands
         if self.results.multi_hand_landmarks:
 
-                for num, handLms in enumerate(self.results.multi_hand_landmarks):
+                for num, hand in enumerate(self.results.multi_hand_landmarks):
 
                     if len(self.results.multi_handedness) == 1:
-                        for id, lm in enumerate(handLms.landmark):
+                        for id, lm in enumerate(hand.landmark):
                             h, w, c = img.shape
                             cx, cy = int(lm.x * w), int(lm.y * h)
                             lmList.append([id, cx, cy])
@@ -112,13 +113,13 @@ class handDetector():
                         label = self.results.multi_handedness[num].classification[0].label
 
                         if num == 0 and label == "Left":
-                            for id, lm in enumerate(handLms.landmark):
+                            for id, lm in enumerate(hand.landmark):
                                 h, w, c = img.shape
                                 cx, cy = int(lm.x * w), int(lm.y * h)
                                 left_hand_lmList.append([id, cx, cy])
 
                         if num == 1 and label == "Right":
-                            for id, lm in enumerate(handLms.landmark):
+                            for id, lm in enumerate(hand.landmark):
                                 h, w, c = img.shape
                                 cx, cy = int(lm.x * w), int(lm.y * h)
                                 right_hand_lmList.append([id, cx, cy])
@@ -128,34 +129,37 @@ class handDetector():
     
 def main():
 
-    # Webcam width and height
-    w_camp, h_cam = 640, 480
+    # # Webcam width and height
+    # w_camp, h_cam = 640, 480
+    # # Set webcam width and height
+    # cap.set(3, w_camp)
+    # cap.set(4, h_cam)
 
-    # Previous time and Current time
-    p_time = 0
-    c_time = 0
-
-    # Webcam
+    # Initialize webcam
     cap = cv2.VideoCapture(0)
+    # Set the frames per second to 30
+    cap.set(cv2.CAP_PROP_FPS, 30)
 
-    # Set webcam width and height
-    cap.set(3, w_camp)
-    cap.set(4, h_cam)
+    # Initialize hand detector
+    hand_detecter = handDetector()
 
-    detecter = handDetector()
+    fpsReader = FPS(avgCount=30)
 
     while True:
         # Get image from webcam
         success, img = cap.read()
-
         # Flip image
         img = cv2.flip(img, 1)
+
+        fps, img = fpsReader.update(img, pos=(20, 50), bgColor=(255, 0, 255),
+                                    textColor=(255, 255, 255), scale=3, thickness=3)          
         
         # Find hands
-        img = detecter.draw_hands(img)
+        img = hand_detecter.draw_hands(img)
 
-        # Find position
-        lmList = detecter.find_pos_hands(img)
+
+        #Find position
+        lmList = hand_detecter.find_pos_hands(img)
 
         if lmList:
             if len(lmList) == 1:
@@ -165,11 +169,6 @@ def main():
                     print(f"Right Hand: {lmList[1][4]}")
                     print(f"Left Hand: {lmList[0][4]}")
 
-        # FPS Counter
-        c_time = time()
-        fps = 1 / (c_time - p_time)
-        p_time = c_time
-        cv2.putText(img, f"FPS: {int(fps)}", (500, 35), cv2.FONT_HERSHEY_PLAIN, 2, TEXT_COLOR, 3) 
 
         # Show image
         cv2.imshow("Hand Track", img)

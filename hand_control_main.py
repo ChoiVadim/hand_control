@@ -9,9 +9,9 @@ from cvzone.HandTrackingModule import HandDetector
 # The MAC address of a Bluetooth adapter on the server
 HOST = 'C0:3C:59:D8:CE:8E'
 # The port used by the server
-PORT = 6
+PORT = 5
 # The size of the header
-HEADER_SIZE = 64
+HEADER_SIZE = 20
 # The format of the message
 FORMAT = "ASCII"
 
@@ -22,13 +22,19 @@ def main():
     # Create the server socket
     server = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
     server.bind((HOST, PORT))
-    server.listen(1)
+    server.listen(2)
     print(f"Server is listening on {HOST}")
 
     # Accept connections from the first client
     robot_arm_socket, address = server.accept()
     print('Connected by ', address)
     message = robot_arm_socket.recv(HEADER_SIZE).decode(FORMAT)
+    print('Received message: ', message)
+
+    # Accept connections from the second client
+    wheels_socket, address2 = server.accept()
+    print('Connected by ', address2)
+    message = wheels_socket.recv(HEADER_SIZE).decode(FORMAT)
     print('Received message: ', message)
 
     # Initialize the webcam to capture video
@@ -63,33 +69,9 @@ def main():
             fingers1 = detector.fingersUp(hand1)
             # print(f'H1 = {fingers1}', end=" ")  # Print the count of fingers that are up
             if fingers1:
-                msg_to_arm = "".join(str(i) for i in fingers1)
-
-                input_x = np.array([0, 640])
-                output_x = np.array([-300, 300])
-
-                input_y = np.array([0, 480])
-                output_y = np.array([0, -300])
-
-                # Find the value of gold on day 3
-                x_value = np.interp(center1[0], input_x, output_x)
-                y_value = np.interp(center1[1], input_y, output_y)
-
-                
-                msg_to_arm += f" {int(x_value)} {int(y_value)}"
-
-                print(msg_to_arm)
-                message = msg_to_arm.encode(FORMAT)
-                msg_length = len(message)
-                send_length = str(msg_length).encode(FORMAT)
-                send_length += b' ' * (HEADER_SIZE - len(send_length))
-
-                robot_arm_socket.send(send_length)
-                robot_arm_socket.send(message)
-                # Center of hand
-                cv2.circle(img, center1, 10, (0, 0, 255), cv2.FILLED)
-
-                # Send the message to the client
+                msg_to_wheels = "".join(str(i) for i in fingers1)
+                print(f"H1 = {msg_to_wheels}")
+                wheels_socket.send(msg_to_wheels.encode(FORMAT))
 
 
             # Calculate distance between specific landmarks on the first hand and draw it on the image
@@ -108,11 +90,17 @@ def main():
                 # Count the number of fingers up for the second hand
                 fingers2 = detector.fingersUp(hand2)
 
+                if fingers2:
+                    msg_to_arm = "".join(str(i) for i in fingers2)
+                    print(f"H2 = {msg_to_arm}")
+                    robot_arm_socket.send(msg_to_arm.encode(FORMAT))
+
                 # Calculate distance between the index fingers of both hands and draw it on the image
                 length, info, img = detector.findDistance(lmList1[8][0:2], lmList2[8][0:2], img, color=(255, 0, 0),
                                                           scale=10)
                 
-                
+                # Center of hand
+                cv2.circle(img, center2, 10, (0, 0, 255), cv2.FILLED)
 
 
         # Display the image in a window
@@ -120,7 +108,8 @@ def main():
 
         # Keep the window open and update it for each frame; wait for 1 millisecond between frames
         if cv2.waitKey(1) & 0xff == ord('q'):
-            robot_arm_socket.close()
+            arm_socket.close()
+            wheels_socket.close()
             break
 
 
