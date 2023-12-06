@@ -3,6 +3,7 @@ import socket
 import numpy as np
 import cv2
 from cvzone.HandTrackingModule import HandDetector
+from cvzone.FPS import FPS
 
 
 # The MAC address of a Bluetooth adapter on the server
@@ -38,8 +39,12 @@ def main():
 
 
     # Initialize the webcam to capture video
-    # The '2' indicates the third camera connected to your computer; '0' would usually refer to the built-in camera
     cap = cv2.VideoCapture(0)
+    w_camp, h_cam = 1280, 720
+    cap.set(3, w_camp)
+    cap.set(4, h_cam)
+    cap.set(cv2.CAP_PROP_FPS, 30)
+    fpsReader = FPS(avgCount=30)
 
     # Initialize the HandDetector class with the given parameters
     detector = HandDetector(staticMode=False, maxHands=2, modelComplexity=1, detectionCon=0.5, minTrackCon=0.5)
@@ -55,6 +60,11 @@ def main():
         # The 'draw' parameter draws landmarks and hand outlines on the image if set to True
         # The 'flipType' parameter flips the image, making it easier for some detections
         hands, img = detector.findHands(img, draw=True, flipType=False)
+
+        # Update the FPS counter and display it on the image
+        fps, img = fpsReader.update(img, pos=(20, 50),
+                            bgColor=(255, 0, 255), textColor=(255, 255, 255),
+                            scale=3, thickness=3)
 
         # Check if any hands are detected
         if hands:
@@ -75,10 +85,10 @@ def main():
                 msg_to_arm = "".join(str(i) for i in fingers1)
 
                 # Convert the coordinates of the dot on the hand to coordinates on the screen
-                input_x = np.array([300, 590])
-                output_x = np.array([-300, 300])
-                input_y = np.array([50, 430])
-                output_y = np.array([-300, 0])
+                input_x = np.array([300, 1240])
+                output_x = np.array([-350, 350])
+                input_y = np.array([100, 680])
+                output_y = np.array([-400, 0])
                 # Interpolate the x and y values
                 x_value = np.interp(dot[0], input_x, output_x)
                 y_value = np.interp(dot[1], input_y, output_y)
@@ -98,9 +108,18 @@ def main():
                 robot_arm_socket.send(send_length)
                 robot_arm_socket.send(message)
 
+                # Information for the second hand detected
+                recv_msg = robot_arm_socket.recv(HEADER_SIZE).decode(FORMAT)
+                distance = f"Distance: {recv_msg}cm"
+
+                # Display the distance on the screen
+                img = cv2.putText(img, distance, (20, 100), cv2.FONT_HERSHEY_SIMPLEX ,  
+                                    1, (255, 255, 255) , 2, cv2.LINE_AA) 
+
+                # Draw a rectangle hand detection area
+                img = cv2.rectangle(img, (300, 100), (1240, 680), (255, 0, 255), 2)
                 # Dot on the hand
                 cv2.circle(img, dot, 10, (0, 0, 255), cv2.FILLED)
-
 
             # Check if a second hand is detected
             if len(hands) == 2:
@@ -126,6 +145,23 @@ def main():
                     # Send the message length first and then the message
                     wheels_socket.send(send_length)
                     wheels_socket.send(message)
+                    
+        if not hands:
+            # Send a stop msg to the wheels
+            stop_msg = "11111"
+            msg_length = len(stop_msg)
+            send_length = str(msg_length).encode(FORMAT)
+            send_length += b' ' * (HEADER_SIZE - len(send_length))
+            wheels_socket.send(send_length)
+            wheels_socket.send(stop_msg.encode(FORMAT))
+
+            # Send a stop msg to the arms
+            stop_msg = "00000 0 0"
+            msg_length = len(stop_msg)
+            send_length = str(msg_length).encode(FORMAT)
+            send_length += b' ' * (HEADER_SIZE - len(send_length))
+            robot_arm_socket.send(send_length)
+            robot_arm_socket.send(stop_msg.encode(FORMAT))
 
         # Display the image in a window
         cv2.imshow("Hand Track", img)

@@ -29,7 +29,7 @@ def main():
     p_time = 0
     
     # Webcam width and height
-    w_camp, h_cam = 640, 480
+    w_camp, h_cam = 1280, 720
     
     # Webcam
     cap = cv2.VideoCapture(0)
@@ -93,7 +93,9 @@ def main():
         # Show image
         cv2.imshow("Hand Track", img)
         # Exit when press 'q'
-        cv2.waitKey(1)    
+        if cv2.waitKey(1) & 0xff == ord('q'):
+            cv2.destroyAllWindows()
+            break  
 
 if __name__ == "__main__":
     main()
